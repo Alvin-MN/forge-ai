@@ -2,25 +2,45 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
+async function callWithRetry(fn: () => Promise<string>, maxRetries = 3): Promise<string> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 429 && attempt < maxRetries) {
+        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        console.log(`Gemini 429 - retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 export const generateContent = async (
   systemPrompt: string,
   userPrompt: string,
   temperature: number = 0.7,
   maxTokens: number = 3000
 ): Promise<string> => {
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: userPrompt,
-    config: {
-      systemInstruction: systemPrompt,
-      temperature,
-      maxOutputTokens: maxTokens,
-    },
+  return callWithRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature,
+        maxOutputTokens: maxTokens,
+      },
+    });
+    return response.text || "";
   });
-  return response.text || "";
 };
 
-// Keep backward compat export shape
+// Backward compat wrapper so API routes don't need changes
 export const openai = {
   chat: {
     completions: {
