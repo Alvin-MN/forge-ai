@@ -13,16 +13,7 @@ export function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-export function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number = 60000): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (entry.count >= maxRequests) return false;
-  entry.count++;
+// Rate limiting disabled — no limits for now
+export function checkRateLimit(_key: string, _max: number = 999, _window: number = 1): boolean {
   return true;
 }

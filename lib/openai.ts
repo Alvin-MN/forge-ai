@@ -2,15 +2,15 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-async function callWithRetry(fn: () => Promise<string>, maxRetries = 3): Promise<string> {
+async function callWithRetry(fn: () => Promise<string>, maxRetries = 5): Promise<string> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 429 && attempt < maxRetries) {
-        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
-        console.log(`Gemini 429 - retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
+        const wait = Math.min(Math.pow(2, attempt + 1) * 1000, 30000); // 2s, 4s, 8s, 16s, 30s
+        console.log(`Gemini 429 - retry ${attempt + 1}/${maxRetries} in ${wait}ms`);
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
@@ -40,7 +40,6 @@ export const generateContent = async (
   });
 };
 
-// Backward compat wrapper so API routes don't need changes
 export const openai = {
   chat: {
     completions: {

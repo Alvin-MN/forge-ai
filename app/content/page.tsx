@@ -16,6 +16,7 @@ export default function ContentForgePage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<{ platform: string; content: string }[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const toggle = (id: string) => setPlatforms((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
 
@@ -23,15 +24,24 @@ export default function ContentForgePage() {
     if (!input.trim() || !platforms.length) return;
     setLoading(true);
     setResults([]);
+    setError(null);
     try {
       const res = await fetch("/api/generate/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: input.trim(), platforms, tone }),
       });
-      if (!res.ok) { alert((await res.json()).error || "Failed"); return; }
-      setResults((await res.json()).results);
-    } catch { alert("Something went wrong."); } finally { setLoading(false); }
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setResults(data.results);
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copy = (text: string, id: string) => { navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 2000); };
@@ -71,16 +81,21 @@ export default function ContentForgePage() {
           <button onClick={generate} disabled={loading || !input.trim() || !platforms.length} className="w-full bg-[var(--accent)] text-black py-3 rounded-lg font-medium hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? "Generating..." : "Generate Content"}
           </button>
-          <p className="text-xs text-[var(--muted)] text-center">Free: 5/day &middot; <a href="/pricing" className="text-[var(--accent)]">Upgrade for more</a></p>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-sm text-red-400">
+              {error}
+              <button onClick={generate} className="ml-2 underline">Try again</button>
+            </div>
+          )}
         </div>
         <div className="space-y-4">
-          {!results.length && !loading && (
+          {!results.length && !loading && !error && (
             <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 text-center text-[var(--muted-foreground)]">
               <div className="text-4xl mb-4">&#9997;&#65039;</div>
               <p>Generated content appears here.</p>
             </div>
           )}
-          {loading && <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 text-center"><div className="animate-pulse text-[var(--accent)]">Generating...</div></div>}
+          {loading && <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 text-center"><div className="animate-pulse text-[var(--accent)]">Generating (may take a few seconds)...</div></div>}
           {results.map((r) => {
             const p = PLATFORMS.find((x) => x.id === r.platform);
             return (
