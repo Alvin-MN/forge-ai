@@ -4,16 +4,17 @@ import { sanitizeInput, checkRateLimit } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    if (!checkRateLimit(`content:${ip}`, 5, 86400000)) {
-      return NextResponse.json({ error: "Daily limit reached. Upgrade to Pro for more." }, { status: 429 });
-    }
-
     const { input, platforms, tone } = await req.json();
     if (!input || !platforms?.length || !tone) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
     const sanitized = sanitizeInput(input);
-    if (sanitized.length < 10) return NextResponse.json({ error: "Input too short" }, { status: 400 });
+    if (sanitized.length < 10) return NextResponse.json({ error: "Input too short (min 10 chars)" }, { status: 400 });
+
+    // Rate limit AFTER validation so bad requests don't burn slots
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("cf-connecting-ip") || "unknown";
+    if (!checkRateLimit(`content:${ip}`, 50, 86400000)) {
+      return NextResponse.json({ error: "Daily limit reached. Upgrade to Pro for more." }, { status: 429 });
+    }
 
     const platformMap: Record<string, string> = {
       twitter: "X/Twitter Thread (5-7 tweets, numbered 1/ 2/ etc.)",
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     };
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gemini-2.0-flash",
       messages: [
         { role: "system", content: `You are an expert content repurposer. Tone: ${tone}. Output ONLY a valid JSON array with objects: {"platform": "id", "content": "text"}. No markdown fences.` },
         { role: "user", content: `Transform for: ${platforms.map((p: string) => platformMap[p] || p).join(", ")}\n\nContent:\n${sanitized}` },

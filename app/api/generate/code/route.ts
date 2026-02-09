@@ -11,16 +11,16 @@ const prompts: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    if (!checkRateLimit(`code:${ip}`, 3, 86400000)) {
-      return NextResponse.json({ error: "Daily limit reached. Upgrade to Pro." }, { status: 429 });
-    }
-
     const { input, inputType, tool } = await req.json();
     if (!input || !tool || !prompts[tool]) return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
 
     const sanitized = sanitizeInput(input);
     if (sanitized.length < 5) return NextResponse.json({ error: "Input too short" }, { status: 400 });
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("cf-connecting-ip") || "unknown";
+    if (!checkRateLimit(`code:${ip}`, 20, 86400000)) {
+      return NextResponse.json({ error: "Daily limit reached. Upgrade to Pro." }, { status: 429 });
+    }
 
     let codeContent = sanitized;
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gemini-2.0-flash",
       messages: [
         { role: "system", content: `You are a senior software engineer. ${prompts[tool]}` },
         { role: "user", content: `${inputType === "url" ? "Repository info" : "Code"}:\n\n${codeContent}` },
